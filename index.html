@@ -21,6 +21,10 @@
         .leaderboard-header { display: flex; justify-content: space-between; margin-bottom: 15px; margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; }
         .leaderboard-title { font-size: 1.2em; font-weight: bold; color: var(--primary-color); }
         .user-card { background: #fafafa; border-left: 5px solid var(--accent-color); padding: 15px; margin-bottom: 10px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .user-card.completed {background: linear-gradient(135deg, #6a1b9a, #8e24aa); color: white; border-left: 5px solid #ffd700; transform: scale(1.02);box-shadow: 0 8px 15px rgba(106, 27, 154, 0.3);}
+        .user-card.completed .progress-container {background-color: rgba(255, 255, 255, 0.3);}
+        .user-card.completed .progress-bar {background-color: #ffd700; }
+        .user-card.completed .chapter-count {color: #e1bee7; }
         .user-info { display: flex; justify-content: space-between; margin-bottom: 8px; font-weight: bold; }
         .progress-container { width: 100%; background-color: #e0e0e0; border-radius: 10px; height: 10px; overflow: hidden; }
         .progress-bar { height: 100%; background-color: var(--accent-color); transition: width 0.5s ease-in-out; }
@@ -31,8 +35,8 @@
 <body>
 
 <div class="container">
-    <h1>📖 2026 Lighthouse 读经计划</h1>
-    <div class="subtitle">Let's Goo(总共 21 章)</div>
+    <h1>📖 2026 灯塔读经计划</h1>
+    <div class="subtitle">诗篇119:105 你的话是我脚前的灯，路上的光。</div>
 
     <div class="input-group">
         <label for="username">名字 (记得用一样的) </label>
@@ -136,36 +140,49 @@
 
     // 渲染排行榜 UI
     function renderLeaderboard(users) {
-        const listContainer = document.getElementById('leaderboard-list');
-        listContainer.innerHTML = '';
+    const listContainer = document.getElementById('leaderboard-list');
+    listContainer.innerHTML = '';
 
-        if (users.length === 0) {
-            listContainer.innerHTML = '<div class="loading">还没有人打卡，快来做第一个！</div>';
-            return;
-        }
-
-        // 排序：章数多的在上面
-        users.sort((a, b) => b.chapters - a.chapters);
-
-        users.forEach(user => {
-            const percentage = Math.min((user.chapters / 21) * 100, 100);
-            const card = document.createElement('div');
-            card.className = 'user-card';
-            card.innerHTML = `
-                <div class="user-info">
-                    <span>${user.name}</span>
-                    <span class="chapter-count">${user.chapters} / 21 章</span>
-                </div>
-                <div class="progress-container">
-                    <div class="progress-bar" style="width: ${percentage}%"></div>
-                </div>
-            `;
-            listContainer.appendChild(card);
-        });
+    if (users.length === 0) {
+        listContainer.innerHTML = '<div class="loading">还没有人打卡，快来做第一个！</div>';
+        return;
     }
+
+    // 排序：章数多的在上面
+    users.sort((a, b) => b.chapters - a.chapters);
+
+    users.forEach(user => {
+        // 计算进度
+        const percentage = Math.min((user.chapters / 21) * 100, 100);
+        
+        // 检查是否完成 (大于等于21章)
+        const isFinished = user.chapters >= 21;
+        
+        // 如果完成了，加上 'completed' 这个 class
+        // 如果完成了，名字后面加个奖杯 emoji 🏆
+        const cardClass = isFinished ? 'user-card completed' : 'user-card';
+        const nameDisplay = isFinished ? `${user.name} 🏆` : user.name;
+        const statusText = isFinished ? '🎉 已读完！' : `${user.chapters} / 21 章`;
+
+        const card = document.createElement('div');
+        card.className = cardClass; // 应用样式
+        
+        card.innerHTML = `
+            <div class="user-info">
+                <span>${nameDisplay}</span>
+                <span class="chapter-count">${statusText}</span>
+            </div>
+            <div class="progress-container">
+                <div class="progress-bar" style="width: ${percentage}%"></div>
+            </div>
+        `;
+        listContainer.appendChild(card);
+    });
+}
 </script>
 
 </body>
 
 </html>
+
 
