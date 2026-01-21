@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>约翰福音读经挑战</title>
+    <style>
+        /* 保持之前的紫色主题样式不变 */
+        :root { --primary-color: #6a1b9a; --light-purple: #f3e5f5; --accent-color: #ab47bc; --white: #ffffff; }
+        body { font-family: 'Segoe UI', sans-serif; background-color: var(--light-purple); color: #333; margin: 0; padding: 20px; display: flex; justify-content: center; }
+        .container { background-color: var(--white); width: 100%; max-width: 500px; padding: 30px; border-radius: 15px; box-shadow: 0 4px 15px rgba(106, 27, 154, 0.2); }
+        h1 { color: var(--primary-color); text-align: center; margin-bottom: 10px; }
+        .subtitle { text-align: center; color: #666; font-size: 0.9em; margin-bottom: 30px; }
+        .input-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; color: var(--primary-color); }
+        input { width: 100%; padding: 12px; border: 2px solid #e1bee7; border-radius: 8px; font-size: 16px; outline: none; box-sizing: border-box; }
+        input:focus { border-color: var(--primary-color); }
+        button.btn-submit { width: 100%; padding: 15px; background-color: var(--primary-color); color: white; border: none; border-radius: 8px; font-size: 18px; cursor: pointer; transition: 0.3s; }
+        button.btn-submit:hover { background-color: #4a0072; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        .leaderboard-header { display: flex; justify-content: space-between; margin-bottom: 15px; margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px; }
+        .leaderboard-title { font-size: 1.2em; font-weight: bold; color: var(--primary-color); }
+        .user-card { background: #fafafa; border-left: 5px solid var(--accent-color); padding: 15px; margin-bottom: 10px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .user-info { display: flex; justify-content: space-between; margin-bottom: 8px; font-weight: bold; }
+        .progress-container { width: 100%; background-color: #e0e0e0; border-radius: 10px; height: 10px; overflow: hidden; }
+        .progress-bar { height: 100%; background-color: var(--accent-color); transition: width 0.5s ease-in-out; }
+        .chapter-count { font-size: 0.85em; color: #666; }
+        .loading { text-align: center; color: #999; margin: 20px 0; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>📖 约翰福音读经墙</h1>
+    <div class="subtitle">一起在话语中长进 (总共 21 章)</div>
+
+    <div class="input-group">
+        <label for="username">你的名字 (用于识别)</label>
+        <input type="text" id="username" placeholder="例如：大卫">
+    </div>
+
+    <div class="input-group">
+        <label for="chapter">已完成章数 (1-21)</label>
+        <input type="number" id="chapter" min="1" max="21" placeholder="你读到第几章了？">
+    </div>
+
+    <button id="submitBtn" class="btn-submit">更新进度</button>
+
+    <div class="leaderboard-header">
+        <div class="leaderboard-title">🏆 实时榜单</div>
+    </div>
+
+    <div id="leaderboard-list">
+        <div class="loading">正在加载数据...</div>
+    </div>
+</div>
+
+<script type="module">
+    // 1. 引入必要的 Firebase 库
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getFirestore, collection, addDoc, query, where, getDocs, updateDoc, onSnapshot } 
+    from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+    // 🔴 2. 你的配置填在这里 (从 Firebase 控制台复制并替换下面这个对象)
+    const firebaseConfig = {
+            apiKey: "FIREBASE_API_KEY",
+            authDomain: "FIREBASE_AUTH_DOMAIN",
+            projectId: "FIREBASE_PROJECT_ID",
+            storageBucket: "FIREBASE_STORAGE_BUCKET",
+            messagingSenderId: "FIREBASE_MESSAGING_SENDER_ID",
+            appId: "FIREBASE_APP_ID"
+        };
+    // 初始化 Firebase
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const COLLECTION_NAME = "bible_progress";
+
+    // 监听提交按钮
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.addEventListener('click', updateProgress);
+
+    // 3. 实时监听数据库变化 (一旦有人更新，这里自动触发)
+    const q = query(collection(db, COLLECTION_NAME));
+    onSnapshot(q, (snapshot) => {
+        const users = [];
+        snapshot.forEach((doc) => {
+            users.push({ id: doc.id, ...doc.data() });
+        });
+        renderLeaderboard(users);
+    });
+
+    // 更新进度的逻辑
+    async function updateProgress() {
+        const nameInput = document.getElementById('username');
+        const chapterInput = document.getElementById('chapter');
+        const name = nameInput.value.trim();
+        const chapters = parseInt(chapterInput.value);
+
+        if (!name) return alert("请输入名字");
+        if (isNaN(chapters) || chapters < 1 || chapters > 21) return alert("请输入 1-21 之间的数字");
+
+        submitBtn.disabled = true;
+        submitBtn.innerText = "更新中...";
+
+        try {
+            // 检查该名字是否已存在
+            const userQuery = query(collection(db, COLLECTION_NAME), where("name", "==", name));
+            const querySnapshot = await getDocs(userQuery);
+
+            if (!querySnapshot.empty) {
+                // 如果存在，更新第一个匹配的文档
+                const docId = querySnapshot.docs[0].id;
+                const userRef = querySnapshot.docs[0].ref;
+                await updateDoc(userRef, { chapters: chapters });
+            } else {
+                // 如果不存在，创建新文档
+                await addDoc(collection(db, COLLECTION_NAME), {
+                    name: name,
+                    chapters: chapters
+                });
+            }
+            
+            // 清空章数，保留名字方便下次输入
+            chapterInput.value = '';
+            alert("更新成功！");
+
+        } catch (e) {
+            console.error("Error: ", e);
+            alert("更新失败，请检查网络或联系管理员。");
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerText = "更新进度";
+        }
+    }
+
+    // 渲染排行榜 UI
+    function renderLeaderboard(users) {
+        const listContainer = document.getElementById('leaderboard-list');
+        listContainer.innerHTML = '';
+
+        if (users.length === 0) {
+            listContainer.innerHTML = '<div class="loading">还没有人打卡，快来做第一个！</div>';
+            return;
+        }
+
+        // 排序：章数多的在上面
+        users.sort((a, b) => b.chapters - a.chapters);
+
+        users.forEach(user => {
+            const percentage = Math.min((user.chapters / 21) * 100, 100);
+            const card = document.createElement('div');
+            card.className = 'user-card';
+            card.innerHTML = `
+                <div class="user-info">
+                    <span>${user.name}</span>
+                    <span class="chapter-count">${user.chapters} / 21 章</span>
+                </div>
+                <div class="progress-container">
+                    <div class="progress-bar" style="width: ${percentage}%"></div>
+                </div>
+            `;
+            listContainer.appendChild(card);
+        });
+    }
+</script>
+
+</body>
+</html>
